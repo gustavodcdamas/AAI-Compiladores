@@ -63,6 +63,8 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
+      DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+      REPO_NAME: ${{ github.event.repository.name }}
       IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
       IMAGE_TAG: latest
 
@@ -92,7 +94,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@v1
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           trivyignores: .trivyignore
@@ -104,7 +106,7 @@ jobs:
       # 🔧 CORREÇÃO 1: Gerar JSON para artefato
       - name: Generate Trivy JSON report
         if: always()
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           format: 'json'
