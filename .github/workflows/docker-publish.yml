@@ -106,7 +106,7 @@ jobs:
       # 🔧 CORREÇÃO 1: Gerar JSON para artefato
       - name: Generate Trivy JSON report
         if: always()
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v1
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           format: 'json'
@@ -114,6 +114,25 @@ jobs:
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
 
+      - name: Send notifications
+        if: always()
+        uses: ./.github/actions/send-mailgun-report
+        with:
+          api-key: ${{ secrets.MAILGUN_API_KEY }}
+          domain: ${{ secrets.MAILGUN_DOMAIN }}
+          from: ${{ secrets.MAILGUN_FROM_EMAIL }}
+          to: ${{ secrets.REPORT_RECIPIENT_EMAIL }}
+          subject: "Relatório Pipeline Compilador - ${{ steps.status.outputs.deploy_status_text }}"
+          status: ${{ steps.status.outputs.deploy_status }}
+          build-id: ${{ github.run_id }}
+          commit-sha: ${{ github.sha }}
+          actor: ${{ github.actor }}
+          repo-name: ${{ github.repository }}
+          deploy-status-text: ${{ steps.status.outputs.deploy_status_text }}
+          trivy-report: trivy-report.json
+          telegram-chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          telegram-bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
