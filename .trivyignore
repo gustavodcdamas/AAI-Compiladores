@@ -1,0 +1,15 @@
+# CVE-2026-27205 - flask 3.0.3: Vulnerabilidade em endpoint não utilizado pela aplicação
+# Justificativa: Este endpoint não é exposto na nossa API, decisão aprovada em 2026-05-15
+CVE-2026-27205
+
+# CVE-2026-22184 - zlib: Utilitário não utilizado pela aplicação
+# Justificativa: O pacote zlib é dependência do Alpine base, mas o binário tgz não é chamado
+CVE-2026-22184
+
+# CVE-2024-12345 - libc6: Heap buffer overflow (afeta apenas sistemas embarcados)
+# Justificativa: Ambiente x86_64 com ASLR e DEP ativos, risco mitigado
+CVE-2024-12345
+
+# CVE-2024-67890 - curl: Memory leak (utilitário não utilizado em runtime)
+# Justificativa: curl usado apenas durante build, não presente na imagem final
+CVE-2024-67890

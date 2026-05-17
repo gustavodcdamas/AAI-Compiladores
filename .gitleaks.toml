@@ -1,0 +1,19 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "custom-api-key"
+description = "Mailgun API Key"
+regex = '''key-[a-f0-9]{32}'''
+
+# Ignora arquivos de exemplo/documentação
+[[paths]]
+regex = '''docs/.*\.md'''
+ignore = true
+
+# Regras personalizadas (opcional)
+[[rules]]
+id = "allow-email"
+description = "Email address in docs"
+regex = '''\S+@\S+\.\S+'''
+allowlist = ["docs/"]

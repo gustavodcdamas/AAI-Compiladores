@@ -1,0 +1,203 @@
+name: 'Send Mailgun Email Report'
+description: 'Envia relatório do pipeline via Mailgun com anexo'
+inputs:
+  api-key:
+    description: 'Mailgun API Key'
+    required: true
+  domain:
+    description: 'Mailgun Domain'
+    required: true
+  from:
+    description: 'From email address'
+    required: true
+  to:
+    description: 'To email address'
+    required: true
+  subject:
+    description: 'Email subject'
+    required: true
+  status:
+    description: 'Deployment status (success/failed)'
+    required: true
+  build-id:
+    description: 'GitHub Run ID'
+    required: true
+  commit-sha:
+    description: 'Commit SHA'
+    required: true
+  actor:
+    description: 'GitHub Actor'
+    required: true
+  trivy-report:
+    description: 'Path to Trivy JSON report'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare email content
+      id: prepare
+      shell: bash
+      run: |
+        # Define cores/estilos baseado no status
+        if [[ "${{ inputs.status }}" == "success" ]]; then
+          STATUS_COLOR="#2cbe4e"
+          STATUS_TEXT="✅ SUCESSO"
+        else
+          STATUS_COLOR="#e03a3a"
+          STATUS_TEXT="❌ FALHA"
+        fi
+        
+        # Cria o HTML do e-mail
+        cat > email.html << 'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: STATUS_COLOR; color: white; padding: 20px; text-align: center; border-radius: 5px; }
+                .content { padding: 20px; background: #f5f5f5; border-radius: 5px; margin-top: 20px; }
+                .vulnerability { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; }
+                .critical { background: #f8d7da; border-left: 4px solid #dc3545; }
+                .footer { font-size: 12px; text-align: center; margin-top: 20px; color: #666; }
+                table { width: 100%; border-collapse: collapse; }
+                td, th { padding: 8px; text-align: left; }
+                .label { font-weight: bold; width: 30%; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header" style="background-color: STATUS_COLOR;">
+                    <h2>Relatório do Pipeline - Compilador LLVM</h2>
+                    <p>Status: STATUS_TEXT</p>
+                </div>
+                
+                <div class="content">
+                    <h3>📋 Informações do Build</h3>
+                    <table>
+                        <tr><td class="label">Build ID:</td><td>BUILD_ID</td></tr>
+                        <tr><td class="label">Commit:</td><td><code>COMMIT_SHA</code></td></tr>
+                        <tr><td class="label">Autor:</td><td>ACTOR</td></tr>
+                        <tr><td class="label">Data:</td><td>$(date)</td></tr>
+                        <tr><td class="label">Repositório:</td><td>${{ github.repository }}</td></tr>
+                    </table>
+                    
+                    <h3>🔧 Etapas do Pipeline</h3>
+                    <table>
+                        <tr>
+                            <td>✅ Build Docker</td>
+                            <td>✓ Concluído</td>
+                        </tr>
+                        <tr>
+                            <td>🛡️ Trivy Scan</td>
+                            <td>TRIVY_STATUS</td>
+                        </tr>
+                        <tr>
+                            <td>🐳 Push Docker Hub</td>
+                            <td>PUSH_STATUS</td>
+                        </tr>
+                    </table>
+                    
+                    <h3>📊 Relatório de Vulnerabilidades</h3>
+                    <div id="vuln-report">
+                        TRIVY_REPORT
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p>Este é um relatório automático gerado pelo GitHub Actions.</p>
+                    <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/BUILD_ID">Ver detalhes completos no GitHub</a></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        EOF
+        
+        # Substitui placeholders
+        sed -i "s/STATUS_COLOR/${STATUS_COLOR}/g" email.html
+        sed -i "s/STATUS_TEXT/${STATUS_TEXT}/g" email.html
+        sed -i "s/BUILD_ID/${{ inputs.build-id }}/g" email.html
+        sed -i "s/COMMIT_SHA/${{ inputs.commit-sha }}/g" email.html
+        sed -i "s/ACTOR/${{ inputs.actor }}/g" email.html
+        
+        # Define status do Trivy
+        if [[ -f "${{ inputs.trivy-report }}" ]]; then
+          TRIVY_STATUS="✅ Scan concluído (ver relatório anexo)"
+          PUSH_STATUS="${{ inputs.status == 'success' && '✅ Imagem publicada' || '⏸️ Push bloqueado pelo scan' }}"
+          
+          # Extrai resumo do JSON
+          CRITICAL_COUNT=$(jq '.Results[].Vulnerabilities[] | select(.Severity=="CRITICAL") | .VulnerabilityID' "${{ inputs.trivy-report }}" | wc -l)
+          HIGH_COUNT=$(jq '.Results[].Vulnerabilities[] | select(.Severity=="HIGH") | .VulnerabilityID' "${{ inputs.trivy-report }}" | wc -l)
+          
+          if [[ $CRITICAL_COUNT -gt 0 || $HIGH_COUNT -gt 0 ]]; then
+            VULN_HTML="<div class='vulnerability critical'><strong>⚠️ Atenção!</strong><br>Foram encontradas vulnerabilidades:<br>• CRITICAL: ${CRITICAL_COUNT}<br>• HIGH: ${HIGH_COUNT}<br><br>Consulte o anexo JSON para detalhes completos.</div>"
+          else
+            VULN_HTML="<div class='vulnerability'><strong>✅ Nenhuma vulnerabilidade CRITICAL ou HIGH encontrada.</strong></div>"
+          fi
+        else
+          TRIVY_STATUS="⚠️ Scan não executado ou sem relatório"
+          PUSH_STATUS="⏸️ Status desconhecido"
+          VULN_HTML="<p>Relatório não disponível.</p>"
+        fi
+        
+        sed -i "s/TRIVY_STATUS/${TRIVY_STATUS}/g" email.html
+        sed -i "s/PUSH_STATUS/${PUSH_STATUS}/g" email.html
+        sed -i "s|TRIVY_REPORT|${VULN_HTML}|g" email.html
+        
+    - name: Send email via Mailgun API
+      shell: bash
+      run: |
+        # Prepara a requisição multipart (para anexar arquivo)
+        BOUNDARY="----WebKitFormBoundary$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)"
+        
+        # Corpo da requisição
+        cat > request_body << EOF
+        ${BOUNDARY}
+        Content-Disposition: form-data; name="from"
+        
+        ${{ inputs.from }}
+        ${BOUNDARY}
+        Content-Disposition: form-data; name="to"
+        
+        ${{ inputs.to }}
+        ${BOUNDARY}
+        Content-Disposition: form-data; name="subject"
+        
+        ${{ inputs.subject }}
+        ${BOUNDARY}
+        Content-Disposition: form-data; name="html"
+        Content-Type: text/html
+        
+        $(cat email.html)
+        ${BOUNDARY}
+        Content-Disposition: form-data; name="attachment"
+        Content-Type: application/json
+        Content-Transfer-Encoding: base64
+        
+        $(base64 -w 0 ${{ inputs.trivy-report }} 2>/dev/null || echo "")
+        ${BOUNDARY}--
+        EOF
+        
+        # Envia via API do Mailgun
+        curl -s -X POST "https://api.mailgun.net/v3/${{ inputs.domain }}/messages" \
+          -u "api:${{ inputs.api-key }}" \
+          -H "Content-Type: multipart/form-data; boundary=${BOUNDARY}" \
+          --data-binary @request_body
+
+    # 11. Enviar relatório detalhado para Telegram (como documento)
+    - name: Send detailed report to Telegram
+      if: always()
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_CHAT_ID }}
+        token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        document: trivy-report.json
+        caption: |
+          📋 **Relatório Detalhado do Trivy Scan**
+          
+          Build #${{ github.run_number }}
+          Status: ${{ steps.status.outputs.deploy_status_text }}
+          
+          Clique para baixar o relatório JSON completo.

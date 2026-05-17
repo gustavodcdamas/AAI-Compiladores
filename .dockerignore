@@ -1,0 +1,50 @@
+# Git
+.git/
+.gitignore
+
+# Diretórios de output
+output/
+*.ll
+*.s
+*.o
+programa
+
+# Documentação
+docs/
+*.md
+!README.md
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Logs
+*.log
+logs/
+
+# Backups
+*.bak
+*.swp
+*.swo
+
+# Testes temporários
+/tmp/
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos grandes (evitar cache)
+*.tar
+*.gz
+*.zip
