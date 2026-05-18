@@ -93,26 +93,28 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v1
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.1.0
         with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          trivyignores: .trivyignore
-          format: 'table'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true
+          version: latest
 
-      # 🔧 CORREÇÃO 1: Gerar JSON para artefato
+      - name: Run Trivy
+        run: |
+          trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+
       - name: Generate Trivy JSON report
         if: always()
-        uses: aquasecurity/trivy-action@v1
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          format: 'json'
-          output: 'trivy-report.json'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true
+        run: |
+          trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --format json \
+            --output trivy-report.json \
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 
       - name: Send notifications
         if: always()
