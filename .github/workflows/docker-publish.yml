@@ -30,7 +30,7 @@ jobs:
             docker run --rm compilador-test:latest \
               /bin/bash -c "./scripts/run-tests.sh --unit"
           else
-            echo "⚠️ Skipping unit tests"
+            echo "Pulando testes unitarios"
           fi
 
   build-scan-push:
@@ -40,15 +40,10 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
-      DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
-      # 🔧 CORREÇÃO 1: Normalizar nome do repositório para lowercase
-      REPO_NAME: ${{ github.event.repository.name }}
-      REPO_NAME_LOWER: ${{ github.event.repository.name == 'AAI-Compiladores' && 'aai-compiladores' || github.event.repository.name }}
       IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/aai-compiladores
       IMAGE_TAG: latest
 
     steps:
-      # 🔧 CORREÇÃO 2: Checkout ANTES de usar a action customizada
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -63,7 +58,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 🔧 CORREÇÃO 3: Build com nome em lowercase
       - name: Build Docker image
         id: build
         uses: docker/build-push-action@v5
@@ -74,7 +68,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 🔧 CORREÇÃO 4: Trivy via Docker (não precisa instalar)
       - name: Run Trivy vulnerability scanner (table)
         id: trivy
         continue-on-error: true
@@ -88,10 +81,8 @@ jobs:
             --exit-code 1 \
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           
-          # Salva o exit code
           echo "trivy_exit_code=$?" >> $GITHUB_OUTPUT
 
-      # 🔧 CORREÇÃO 5: Gerar JSON (mesmo se falhar)
       - name: Generate Trivy JSON report
         if: always()
         run: |
@@ -106,7 +97,6 @@ jobs:
             --output /workspace/trivy-report.json \
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} || true
 
-      # Determinar status do deploy
       - name: Determine deployment status
         id: status
         run: |
@@ -126,20 +116,45 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
-      # 🔧 CORREÇÃO 6: Push condicional (só se scan passou)
-      - name: Push to Docker Hub
-        if: steps.status.outputs.deploy_status == 'success'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Setup WireGuard VPN (GitHub Actions specific)
+        run: |
+          echo "Configurando WireGuard VPN para GitHub Actions..."
+          
+          # Instala WireGuard
+          sudo apt-get update
+          sudo apt-get install -y wireguard wireguard-tools resolvconf
+          
+          # Cria o arquivo de configuração a partir do secret
+          echo "${{ secrets.WIREGUARD_CONFIG }}" | sudo tee /etc/wireguard/wg0.conf
+          sudo chmod 600 /etc/wireguard/wg0.conf
+          
+          # Sobe a interface VPN
+          sudo wg-quick up wg0
+          
+          # Aguarda conexão
+          sleep 10
+          
+          # Verifica se o IP atribuído é o correto
+          echo "Interface WireGuard:"
+          sudo wg show
+          echo ""
+          echo "IP da VPN:"
+          ip addr show wg0 | grep inet
+          
+          # Testa conectividade
+          echo ""
+          echo "Testando rota via VPN..."
+          if curl -s --max-time 10 --interface wg0 https://api.mailgun.net/v3/domains -I 2>/dev/null | grep -q "200\|401"; then
+            echo "Mailgun acessível via VPN!"
+          else
+            echo "Não foi possível acessar Mailgun via VPN"
+          fi
+          
+          # Mostra o IP público (deve ser o IP do servidor VPN)
+          echo "IP Público (via VPN): $(curl -s --interface wg0 ifconfig.me 2>/dev/null || echo 'falhou')"
+          
+          echo "VPN configurada com sucesso!"
 
-      # 🔧 CORREÇÃO 7: Notificações (executa sempre)
       - name: Send notifications
         if: always()
         uses: ./.github/actions/send-report
@@ -159,6 +174,18 @@ jobs:
           telegram-chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}
           telegram-bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
+      - name: Push to Docker Hub
+        if: steps.status.outputs.deploy_status == 'success'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Upload Trivy report
         if: always()
         uses: actions/upload-artifact@v4
@@ -166,3 +193,9 @@ jobs:
           name: trivy-report
           path: trivy-report.json
           retention-days: 7
+
+      - name: Disconnect VPN (cleanup)
+        if: always()
+        run: |
+          sudo wg-quick down wg0 2>/dev/null || true
+          echo "PN desconectada"
