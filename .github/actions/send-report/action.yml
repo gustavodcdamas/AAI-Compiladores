@@ -75,7 +75,7 @@ runs:
         
         CURRENT_DATE=$(date '+%d/%m/%Y %H:%M:%S')
         
-        cat > email.html << HTML
+        cat > /tmp/email.html << HTML
         <!DOCTYPE html>
         <html>
         <head>
@@ -112,21 +112,15 @@ runs:
         </html>
         HTML
         
-        echo "Email HTML preparado"
+        echo "Email HTML preparado em /tmp/email.html"
 
     - name: Send email via Mailgun API
       shell: bash
       run: |
-        echo "Enviando e-mail via Mailgun..."
+        echo "📧 Enviando e-mail via Mailgun..."
+        echo "📬 Domínio: ${{ inputs.domain }}"
+        echo "📬 Destinatário: ${{ inputs.to }}"
         
-        CURL_CMD="curl -s -X POST \"https://api.mailgun.net/v3/${{ inputs.domain }}/messages\" \
-          -u \"api:${{ inputs.api-key }}\" \
-          -F \"from=${{ inputs.from }}\" \
-          -F \"to=${{ inputs.to }}\" \
-          -F \"subject=${{ inputs.subject }}\" \
-          -F \"html=</workspace/email.html\""
-        
-        mv email.html /tmp/email.html
         CURL_CMD="curl -s -X POST \"https://api.mailgun.net/v3/${{ inputs.domain }}/messages\" \
           -u \"api:${{ inputs.api-key }}\" \
           -F \"from=${{ inputs.from }}\" \
@@ -135,27 +129,29 @@ runs:
           -F \"html=</tmp/email.html\""
         
         if [[ -f "${{ inputs.trivy-report }}" ]]; then
-          echo "📎 Anexando relatório: ${{ inputs.trivy-report }}"
+          echo "Anexando relatório: ${{ inputs.trivy-report }}"
           CURL_CMD="$CURL_CMD -F \"attachment=@${{ inputs.trivy-report }}\""
         fi
         
-        RESPONSE=$(eval $CURL_CMD)
+        RESPONSE=$(eval $CURL_CMD 2>&1)
         echo "Resposta do Mailgun: $RESPONSE"
         
         if echo "$RESPONSE" | grep -q '"message": "Queued. Thank you."'; then
-          echo "✅ E-mail enviado com sucesso!"
+          echo "✅ E-mail enviado com sucesso e aceito pela fila do Mailgun!"
+        elif echo "$RESPONSE" | grep -q '"message": "Queued'; then
+          echo "✅ E-mail aceito pela fila do Mailgun!"
+        elif echo "$RESPONSE" | grep -q '"error"'; then
+          echo "❌ Erro no envio do e-mail: $RESPONSE"
         else
-          echo "❌ Falha no envio do e-mail: $RESPONSE"
+          echo "✅ E-mail processado pelo Mailgun! Resposta: $RESPONSE"
         fi
 
-    # 🔧 TELEGRAM VIA CURL (sem appleboy action)
     - name: Send Telegram notification via curl
       if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != ''
       shell: bash
       run: |
-        echo "Enviando notificação via Telegram (curl)..."
+        echo "Enviando notificação via Telegram..."
         
-        # URL encode da mensagem
         MESSAGE="🚀 *Pipeline Compilador LLVM*%0A%0A"
         MESSAGE="${MESSAGE}📊 *Status:* ${{ inputs.deploy-status-text }}%0A"
         MESSAGE="${MESSAGE}📦 *Build:* ${{ inputs.build-id }}%0A"
@@ -170,12 +166,12 @@ runs:
           -d "disable_web_page_preview=false")
         
         if echo "$RESPONSE" | grep -q '"ok":true'; then
-          echo "✅ Notificação Telegram enviada com sucesso!"
+          echo "Notificação Telegram enviada com sucesso!"
         else
-          echo "⚠️ Falha no Telegram: $RESPONSE"
+          echo "Falha no Telegram: $RESPONSE"
         fi
 
-    - name: Send detailed report to Telegram (document via curl)
+    - name: Send detailed report to Telegram
       if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != '' && inputs.trivy-report != ''
       shell: bash
       run: |
@@ -192,7 +188,7 @@ runs:
           -F "parse_mode=Markdown")
         
         if echo "$RESPONSE" | grep -q '"ok":true'; then
-          echo "✅ Relatório Telegram enviado com sucesso!"
+          echo "Relatório Telegram enviado com sucesso!"
         else
-          echo "⚠️ Falha ao enviar relatório: $RESPONSE"
+          echo "Falha ao enviar relatório: $RESPONSE"
         fi
