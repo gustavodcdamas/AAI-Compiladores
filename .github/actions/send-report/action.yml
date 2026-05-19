@@ -34,7 +34,7 @@ inputs:
     required: true
     default: 'unknown/repo'
   deploy-status-text:
-    description: 'Deployment status text (✅ SUCESSO / ❌ FALHA)'
+    description: 'Deployment status text'
     required: false
     default: 'Status desconhecido'
   trivy-report:
@@ -53,7 +53,6 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    # Instala jq se não estiver presente
     - name: Install jq
       shell: bash
       run: |
@@ -66,7 +65,6 @@ runs:
       id: prepare
       shell: bash
       run: |
-        # Define cores/estilos baseado no status
         if [[ "${{ inputs.status }}" == "success" ]]; then
           STATUS_COLOR="#2cbe4e"
           STATUS_TEXT="✅ SUCESSO"
@@ -75,159 +73,99 @@ runs:
           STATUS_TEXT="❌ FALHA"
         fi
         
-        # Data atual
         CURRENT_DATE=$(date '+%d/%m/%Y %H:%M:%S')
         
-        # Cria o HTML do e-mail (sem placeholders complexos)
         cat > email.html << HTML
         <!DOCTYPE html>
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background-color: ${STATUS_COLOR}; color: white; padding: 20px; text-align: center; border-radius: 5px; }
-                .content { padding: 20px; background: #f5f5f5; border-radius: 5px; margin-top: 20px; }
-                .vulnerability { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0; }
-                .critical { background: #f8d7da; border-left: 4px solid #dc3545; }
+                body { font-family: Arial, sans-serif; }
+                .header { background-color: ${STATUS_COLOR}; color: white; padding: 20px; text-align: center; }
+                .content { padding: 20px; background: #f5f5f5; }
                 .footer { font-size: 12px; text-align: center; margin-top: 20px; color: #666; }
                 table { width: 100%; border-collapse: collapse; }
-                td, th { padding: 8px; text-align: left; }
+                td { padding: 8px; }
                 .label { font-weight: bold; width: 30%; }
             </style>
         </head>
         <body>
-            <div class="container">
-                <div class="header">
-                    <h2>Relatório do Pipeline - Compilador LLVM</h2>
-                    <p>Status: ${STATUS_TEXT}</p>
-                </div>
-                
-                <div class="content">
-                    <h3>📋 Informações do Build</h3>
-                    <table>
-                        <tr><td class="label">Build ID:</td><td>${{ inputs.build-id }}</td></tr>
-                        <tr><td class="label">Commit:</td><td><code>${{ inputs.commit-sha }}</code></td></tr>
-                        <tr><td class="label">Autor:</td><td>${{ inputs.actor }}</td></tr>
-                        <tr><td class="label">Data:</td><td>${CURRENT_DATE}</td></tr>
-                        <tr><td class="label">Repositório:</td><td>${{ inputs.repo-name }}</td></tr>
-                    </table>
-                    
-                    <h3>🔧 Etapas do Pipeline</h3>
-                    <table>
-                        <tr><td>✅ Build Docker</td><td>✓ Concluído</td></tr>
-                        <tr><td>🛡️ Trivy Scan</td><td id="trivy-status">Processando...</td></tr>
-                        <tr><td>🐳 Push Docker Hub</td><td id="push-status">Processando...</td></tr>
-                    </table>
-                    
-                    <h3>📊 Relatório de Vulnerabilidades</h3>
-                    <div id="vuln-report">
-                        Processando...
-                    </div>
-                </div>
-                
-                <div class="footer">
-                    <p>Este é um relatório automático gerado pelo GitHub Actions.</p>
-                    <p><a href="https://github.com/${{ inputs.repo-name }}/actions/runs/${{ inputs.build-id }}">Ver detalhes completos no GitHub</a></p>
-                </div>
+            <div class="header">
+                <h2>Relatório do Pipeline - Compilador LLVM</h2>
+                <p>Status: ${STATUS_TEXT}</p>
+            </div>
+            <div class="content">
+                <h3>📋 Informações do Build</h3>
+                <table>
+                    <tr><td class="label">Build ID:</td><td>${{ inputs.build-id }}</td></tr>
+                    <tr><td class="label">Commit:</td><td><code>${{ inputs.commit-sha }}</code></td></tr>
+                    <tr><td class="label">Autor:</td><td>${{ inputs.actor }}</td></tr>
+                    <tr><td class="label">Data:</td><td>${CURRENT_DATE}</td></tr>
+                    <tr><td class="label">Repositório:</td><td>${{ inputs.repo-name }}</td></tr>
+                </table>
+                <p><a href="https://github.com/${{ inputs.repo-name }}/actions/runs/${{ inputs.build-id }}">🔗 Ver detalhes no GitHub</a></p>
+            </div>
+            <div class="footer">
+                <p>E-mail automático gerado pelo GitHub Actions.</p>
             </div>
         </body>
         </html>
         HTML
         
-        # Define status do Trivy e atualiza o HTML
-        if [[ -f "${{ inputs.trivy-report }}" ]]; then
-          TRIVY_STATUS="✅ Scan concluído (ver relatório anexo)"
-          if [[ "${{ inputs.status }}" == "success" ]]; then
-            PUSH_STATUS="✅ Imagem publicada"
-          else
-            PUSH_STATUS="⏸️ Push bloqueado pelo scan"
-          fi
-          
-          # Extrai resumo do JSON usando jq
-          CRITICAL_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' "${{ inputs.trivy-report }}" 2>/dev/null || echo "0")
-          HIGH_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' "${{ inputs.trivy-report }}" 2>/dev/null || echo "0")
-          
-          if [[ $CRITICAL_COUNT -gt 0 || $HIGH_COUNT -gt 0 ]]; then
-            VULN_HTML="<div class='vulnerability critical'><strong>⚠️ Atenção!</strong><br>Foram encontradas vulnerabilidades:<br>• CRITICAL: ${CRITICAL_COUNT}<br>• HIGH: ${HIGH_COUNT}<br><br>Consulte o anexo JSON para detalhes completos.</div>"
-          else
-            VULN_HTML="<div class='vulnerability'><strong>✅ Nenhuma vulnerabilidade CRITICAL ou HIGH encontrada.</strong></div>"
-          fi
-        else
-          TRIVY_STATUS="⚠️ Scan não executado ou sem relatório"
-          PUSH_STATUS="⏸️ Status desconhecido"
-          VULN_HTML="<p>Relatório não disponível.</p>"
-        fi
-        
-        # Atualiza o HTML com os valores
-        sed -i "s|id=\"trivy-status\">.*</td>|id=\"trivy-status\">${TRIVY_STATUS}</td>|g" email.html
-        sed -i "s|id=\"push-status\">.*</td>|id=\"push-status\">${PUSH_STATUS}</td>|g" email.html
-        sed -i "s|id=\"vuln-report\">.*</div>|id=\"vuln-report\">${VULN_HTML}</div>|g" email.html
-        
-        echo "Email HTML preparado com sucesso"
+        echo "✅ Email HTML preparado"
 
     - name: Send email via Mailgun API
       shell: bash
       run: |
-        echo "Enviando e-mail via Mailgun..."
+        echo "📧 Enviando e-mail via Mailgun..."
         
-        # Verifica se o arquivo de relatório existe
+        CURL_CMD="curl -s -X POST \"https://api.mailgun.net/v3/${{ inputs.domain }}/messages\" \
+          -u \"api:${{ inputs.api-key }}\" \
+          -F \"from=${{ inputs.from }}\" \
+          -F \"to=${{ inputs.to }}\" \
+          -F \"subject=${{ inputs.subject }}\" \
+          -F \"html=<email.html\""
+        
         if [[ -f "${{ inputs.trivy-report }}" ]]; then
-          echo "Anexando relatório: ${{ inputs.trivy-report }}"
-          ATTACHMENT_DATA="--data-binary @${{ inputs.trivy-report }}"
-        else
-          echo "Nenhum relatório para anexar"
-          ATTACHMENT_DATA=""
+          echo "📎 Anexando relatório: ${{ inputs.trivy-report }}"
+          CURL_CMD="$CURL_CMD -F \"attachment=@${{ inputs.trivy-report }}\""
         fi
         
-        # Envia via API do Mailgun
-        RESPONSE=$(curl -s -X POST "https://api.mailgun.net/v3/${{ inputs.domain }}/messages" \
-          -u "api:${{ inputs.api-key }}" \
-          -F "from=${{ inputs.from }}" \
-          -F "to=${{ inputs.to }}" \
-          -F "subject=${{ inputs.subject }}" \
-          -F "html=<email.html" \
-          ${ATTACHMENT_DATA:+ -F "attachment=@${{ inputs.trivy-report }}"})
+        RESPONSE=$(eval $CURL_CMD)
+        echo "📬 Resposta do Mailgun: $RESPONSE"
         
-        echo "Resposta do Mailgun: $RESPONSE"
-        
-        # Verifica se o envio foi bem sucedido
         if echo "$RESPONSE" | grep -q '"message": "Queued. Thank you."'; then
           echo "✅ E-mail enviado com sucesso!"
         else
           echo "❌ Falha no envio do e-mail: $RESPONSE"
-          exit 1
+          echo "⚠️ Continuando pipeline (erro não crítico)"
         fi
 
-    # Envio para Telegram
     - name: Send Telegram notification
       if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != ''
-      uses: appleboy/telegram-action@master
+      uses: appleboy/telegram-action@v1
       with:
         to: ${{ inputs.telegram-chat-id }}
         token: ${{ inputs.telegram-bot-token }}
         message: |
-          🚀 **Pipeline de Compilação LLVM**
+          🚀 **Pipeline Compilador LLVM**
           
-          📦 **Repositório:** ${{ inputs.repo-name }}
+          📊 **Status:** ${{ inputs.deploy-status-text }}
+          📦 **Build:** ${{ inputs.build-id }}
           🔖 **Commit:** `${{ inputs.commit-sha }}`
           👤 **Autor:** ${{ inputs.actor }}
           
-          📊 **Status:** ${{ inputs.deploy-status-text }}
-          
-          🔗 **Ver detalhes:** https://github.com/${{ inputs.repo-name }}/actions/runs/${{ inputs.build-id }}
+          🔗 **Detalhes:** https://github.com/${{ inputs.repo-name }}/actions/runs/${{ inputs.build-id }}
 
-    - name: Send detailed report to Telegram (document)
-      if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != '' && inputs.trivy-report != '' && hashFiles(inputs.trivy-report) != ''
-      uses: appleboy/telegram-action@master
+    - name: Send detailed report to Telegram
+      if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != '' && inputs.trivy-report != ''
+      uses: appleboy/telegram-action@v1
       with:
         to: ${{ inputs.telegram-chat-id }}
         token: ${{ inputs.telegram-bot-token }}
         document: ${{ inputs.trivy-report }}
         caption: |
-          📋 **Relatório Detalhado do Trivy Scan**
+          📋 **Relatório Trivy Scan**
           
           Build #${{ inputs.build-id }}
           Status: ${{ inputs.deploy-status-text }}
-          
-          Clique para baixar o relatório JSON completo.
