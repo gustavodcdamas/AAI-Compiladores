@@ -30,7 +30,7 @@ inputs:
     description: 'GitHub Actor'
     required: true
   repo-name:
-    description: 'Repository name (ex: user/repo)'
+    description: 'Repository name'
     required: true
     default: 'unknown/repo'
   deploy-status-text:
@@ -95,7 +95,7 @@ runs:
                 <p>Status: ${STATUS_TEXT}</p>
             </div>
             <div class="content">
-                <h3>📋 Informações do Build</h3>
+                <h3>Informações do Build</h3>
                 <table>
                     <tr><td class="label">Build ID:</td><td>${{ inputs.build-id }}</td></tr>
                     <tr><td class="label">Commit:</td><td><code>${{ inputs.commit-sha }}</code></td></tr>
@@ -112,19 +112,27 @@ runs:
         </html>
         HTML
         
-        echo "✅ Email HTML preparado"
+        echo "Email HTML preparado"
 
     - name: Send email via Mailgun API
       shell: bash
       run: |
-        echo "📧 Enviando e-mail via Mailgun..."
+        echo "Enviando e-mail via Mailgun..."
         
         CURL_CMD="curl -s -X POST \"https://api.mailgun.net/v3/${{ inputs.domain }}/messages\" \
           -u \"api:${{ inputs.api-key }}\" \
           -F \"from=${{ inputs.from }}\" \
           -F \"to=${{ inputs.to }}\" \
           -F \"subject=${{ inputs.subject }}\" \
-          -F \"html=<email.html\""
+          -F \"html=</workspace/email.html\""
+        
+        mv email.html /tmp/email.html
+        CURL_CMD="curl -s -X POST \"https://api.mailgun.net/v3/${{ inputs.domain }}/messages\" \
+          -u \"api:${{ inputs.api-key }}\" \
+          -F \"from=${{ inputs.from }}\" \
+          -F \"to=${{ inputs.to }}\" \
+          -F \"subject=${{ inputs.subject }}\" \
+          -F \"html=</tmp/email.html\""
         
         if [[ -f "${{ inputs.trivy-report }}" ]]; then
           echo "📎 Anexando relatório: ${{ inputs.trivy-report }}"
@@ -132,37 +140,22 @@ runs:
         fi
         
         RESPONSE=$(eval $CURL_CMD)
-        echo "📬 Resposta do Mailgun: $RESPONSE"
+        echo "Resposta do Mailgun: $RESPONSE"
         
         if echo "$RESPONSE" | grep -q '"message": "Queued. Thank you."'; then
           echo "✅ E-mail enviado com sucesso!"
         else
           echo "❌ Falha no envio do e-mail: $RESPONSE"
-          echo "⚠️ Continuando pipeline (erro não crítico)"
         fi
 
-    - name: Send Telegram notification
-      if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != ''
-      uses: appleboy/telegram-action@v1
-      with:
-        to: ${{ inputs.telegram-chat-id }}
-        token: ${{ inputs.telegram-bot-token }}
-        message: |
-          🚀 **Pipeline Compilador LLVM**
-          
-          📊 **Status:** ${{ inputs.deploy-status-text }}
-          📦 **Build:** ${{ inputs.build-id }}
-          🔖 **Commit:** `${{ inputs.commit-sha }}`
-          👤 **Autor:** ${{ inputs.actor }}
-          
-          🔗 **Detalhes:** https://github.com/${{ inputs.repo-name }}/actions/runs/${{ inputs.build-id }}
-
-    - name: Send Telegram notification (via curl)
+    # 🔧 TELEGRAM VIA CURL (sem appleboy action)
+    - name: Send Telegram notification via curl
       if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != ''
       shell: bash
       run: |
-        echo "📱 Enviando notificação via Telegram..."
+        echo "Enviando notificação via Telegram (curl)..."
         
+        # URL encode da mensagem
         MESSAGE="🚀 *Pipeline Compilador LLVM*%0A%0A"
         MESSAGE="${MESSAGE}📊 *Status:* ${{ inputs.deploy-status-text }}%0A"
         MESSAGE="${MESSAGE}📦 *Build:* ${{ inputs.build-id }}%0A"
@@ -170,13 +163,17 @@ runs:
         MESSAGE="${MESSAGE}👤 *Autor:* ${{ inputs.actor }}%0A%0A"
         MESSAGE="${MESSAGE}🔗 [Ver detalhes](https://github.com/${{ inputs.repo-name }}/actions/runs/${{ inputs.build-id }})"
         
-        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram-bot-token }}/sendMessage" \
+        RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram-bot-token }}/sendMessage" \
           -d "chat_id=${{ inputs.telegram-chat-id }}" \
           -d "text=${MESSAGE}" \
           -d "parse_mode=Markdown" \
-          -d "disable_web_page_preview=false"
+          -d "disable_web_page_preview=false")
         
-        echo "✅ Notificação enviada"
+        if echo "$RESPONSE" | grep -q '"ok":true'; then
+          echo "✅ Notificação Telegram enviada com sucesso!"
+        else
+          echo "⚠️ Falha no Telegram: $RESPONSE"
+        fi
 
     - name: Send detailed report to Telegram (document via curl)
       if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != '' && inputs.trivy-report != ''
@@ -184,11 +181,18 @@ runs:
       run: |
         echo "📎 Enviando relatório para Telegram..."
         
-        # Envia o documento
-        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram-bot-token }}/sendDocument" \
+        CAPTION="📋 *Relatório Trivy Scan*%0A"
+        CAPTION="${CAPTION}Build #${{ inputs.build-id }}%0A"
+        CAPTION="${CAPTION}Status: ${{ inputs.deploy-status-text }}"
+        
+        RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram-bot-token }}/sendDocument" \
           -F "chat_id=${{ inputs.telegram-chat-id }}" \
           -F "document=@${{ inputs.trivy-report }}" \
-          -F "caption=📋 *Relatório Trivy Scan*%0ABuild #${{ inputs.build-id }}%0AStatus: ${{ inputs.deploy-status-text }}" \
-          -F "parse_mode=Markdown"
+          -F "caption=${CAPTION}" \
+          -F "parse_mode=Markdown")
         
-        echo "✅ Relatório enviado"
+        if echo "$RESPONSE" | grep -q '"ok":true'; then
+          echo "✅ Relatório Telegram enviado com sucesso!"
+        else
+          echo "⚠️ Falha ao enviar relatório: $RESPONSE"
+        fi
