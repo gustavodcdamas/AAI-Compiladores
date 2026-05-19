@@ -157,15 +157,38 @@ runs:
           
           🔗 **Detalhes:** https://github.com/${{ inputs.repo-name }}/actions/runs/${{ inputs.build-id }}
 
-    - name: Send detailed report to Telegram
+    - name: Send Telegram notification (via curl)
+      if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != ''
+      shell: bash
+      run: |
+        echo "📱 Enviando notificação via Telegram..."
+        
+        MESSAGE="🚀 *Pipeline Compilador LLVM*%0A%0A"
+        MESSAGE="${MESSAGE}📊 *Status:* ${{ inputs.deploy-status-text }}%0A"
+        MESSAGE="${MESSAGE}📦 *Build:* ${{ inputs.build-id }}%0A"
+        MESSAGE="${MESSAGE}🔖 *Commit:* \`${{ inputs.commit-sha }}\`%0A"
+        MESSAGE="${MESSAGE}👤 *Autor:* ${{ inputs.actor }}%0A%0A"
+        MESSAGE="${MESSAGE}🔗 [Ver detalhes](https://github.com/${{ inputs.repo-name }}/actions/runs/${{ inputs.build-id }})"
+        
+        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram-bot-token }}/sendMessage" \
+          -d "chat_id=${{ inputs.telegram-chat-id }}" \
+          -d "text=${MESSAGE}" \
+          -d "parse_mode=Markdown" \
+          -d "disable_web_page_preview=false"
+        
+        echo "✅ Notificação enviada"
+
+    - name: Send detailed report to Telegram (document via curl)
       if: inputs.telegram-chat-id != '' && inputs.telegram-bot-token != '' && inputs.trivy-report != ''
-      uses: appleboy/telegram-action@v1
-      with:
-        to: ${{ inputs.telegram-chat-id }}
-        token: ${{ inputs.telegram-bot-token }}
-        document: ${{ inputs.trivy-report }}
-        caption: |
-          📋 **Relatório Trivy Scan**
-          
-          Build #${{ inputs.build-id }}
-          Status: ${{ inputs.deploy-status-text }}
+      shell: bash
+      run: |
+        echo "📎 Enviando relatório para Telegram..."
+        
+        # Envia o documento
+        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram-bot-token }}/sendDocument" \
+          -F "chat_id=${{ inputs.telegram-chat-id }}" \
+          -F "document=@${{ inputs.trivy-report }}" \
+          -F "caption=📋 *Relatório Trivy Scan*%0ABuild #${{ inputs.build-id }}%0AStatus: ${{ inputs.deploy-status-text }}" \
+          -F "parse_mode=Markdown"
+        
+        echo "✅ Relatório enviado"
