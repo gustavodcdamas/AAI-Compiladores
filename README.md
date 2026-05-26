@@ -412,7 +412,7 @@ docker run \
 
 ---
 
-## 🎓 Instituição
+## 🎓 Instituição - FUMEC
 
 **Curso:** Ciência da Computação  
 **Disciplina:** Compiladores  
