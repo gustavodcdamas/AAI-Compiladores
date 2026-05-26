@@ -2,9 +2,9 @@
 
 > Atividade Auto Instrucional — Disciplina de Compiladores — Ciência da Computação
 
-# 🚀 Compilador LLVM — Demonstração Acadêmica
+# Compilador LLVM — Demonstração Acadêmica
 
-## 🎯 Objetivo
+## Objetivo
 
 Demonstrar, de forma prática e educacional, as principais etapas de um compilador moderno utilizando a infraestrutura LLVM, incluindo:
 
@@ -24,7 +24,7 @@ Demonstrar, de forma prática e educacional, as principais etapas de um compilad
 
 ---
 
-# 📋 Índice
+# Índice
 
 - [📖 Visão Geral](#-visão-geral)
 - [🏗️ Arquitetura do Pipeline](#️-arquitetura-do-pipeline)
@@ -40,7 +40,7 @@ Demonstrar, de forma prática e educacional, as principais etapas de um compilad
 
 ---
 
-# 📖 Visão Geral
+# Visão Geral
 
 Este projeto demonstra, de maneira acadêmica, como funciona um compilador moderno utilizando a infraestrutura **LLVM (Low Level Virtual Machine)**.
 
@@ -54,7 +54,7 @@ O foco principal está nas etapas de:
 
 ---
 
-## 🎓 Objetivos Acadêmicos
+## Objetivos Acadêmicos
 
 | Etapa do Compilador | Ferramenta | Demonstração |
 |---|---|---|
@@ -66,7 +66,7 @@ O foco principal está nas etapas de:
 
 ---
 
-# 🏗️ Arquitetura do Pipeline
+# Arquitetura do Pipeline
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
@@ -99,7 +99,7 @@ O foco principal está nas etapas de:
 
 ---
 
-# ⚙️ Pré-requisitos
+# Pré-requisitos
 
 Antes de executar o projeto, é necessário possuir:
 
@@ -110,9 +110,9 @@ Antes de executar o projeto, é necessário possuir:
 
 ---
 
-# 🚀 Instalação e Execução
+# Instalação e Execução
 
-## 📥 Clone o repositório
+## Clone o repositório
 
 ```bash
 git clone https://github.com/gustavodcdamas/AAI-Compiladores.git
@@ -122,7 +122,7 @@ cd AAI-Compiladores
 
 ---
 
-## 🐳 Executando com Docker
+## Executando com Docker
 
 ### Construir a imagem
 
@@ -160,7 +160,7 @@ docker-compose run --rm compilador-llvm /bin/bash
 
 ---
 
-# 🧪 Comandos disponíveis dentro do container
+# Comandos disponíveis dentro do container
 
 ```bash
 # Gerar LLVM IR, assembly e executável
@@ -175,7 +175,7 @@ lli output/exemplo.ll
 
 ---
 
-# ⚡ Build e Teste em Um Único Comando
+# Build e Teste em Um Único Comando
 
 ```bash
 docker build -t compilador-llvm:test . && \
@@ -191,7 +191,7 @@ docker run --rm compilador-llvm:test /bin/bash -c " \
 
 ---
 
-# 📁 Estrutura do Projeto
+# Estrutura do Projeto
 
 ```text
 AAI-Compiladores/
@@ -217,7 +217,7 @@ AAI-Compiladores/
 
 ---
 
-## 📦 Arquivos Gerados (`output/`)
+## Arquivos Gerados (`output/`)
 
 | Arquivo | Descrição |
 |---|---|
@@ -229,9 +229,9 @@ AAI-Compiladores/
 
 ---
 
-# 🎬 Demonstração Prática
+# Demonstração Prática
 
-## 📄 Código Fonte (`src/exemplo.c`)
+## Código Fonte (`src/exemplo.c`)
 
 ```c
 #include <stdio.h>
@@ -261,7 +261,7 @@ int main() {
 
 ---
 
-## ⚙️ LLVM IR Gerado (Exemplo)
+## LLVM IR Gerado (Exemplo)
 
 ```llvm
 define i32 @soma(i32 %a, i32 %b) {
@@ -287,7 +287,7 @@ if.else:
 
 ---
 
-## ▶️ Saída da Execução
+## Saída da Execução
 
 ```text
 === Demonstracao Compilador LLVM ===
@@ -301,7 +301,7 @@ Resultado 2 (15): 30
 
 ---
 
-# 🔄 Pipeline CI/CD
+# Pipeline CI/CD
 
 O pipeline executa automaticamente a cada `push` na branch `main`.
 
@@ -316,7 +316,7 @@ O pipeline executa automaticamente a cada `push` na branch `main`.
 
 # 🛡️ Segurança e Scans
 
-## 🔍 Trivy
+## Trivy
 
 Exemplo de `.trivyignore`:
 
@@ -327,7 +327,7 @@ CVE-2024-12345
 
 ---
 
-## 🔐 Gitleaks
+## Gitleaks
 
 Exemplo de `.gitleaks.toml`:
 
@@ -343,9 +343,9 @@ regex = '''key-[a-f0-9]{32}'''
 
 ---
 
-# 🐛 Troubleshooting
+# Troubleshooting
 
-## ❌ Erro: `make: command not found`
+## Erro: `make: command not found`
 
 ```bash
 # Ubuntu/Debian
@@ -357,7 +357,7 @@ brew install make
 
 ---
 
-## ❌ Erro: `permission denied`
+## Erro: `permission denied`
 
 ```bash
 chmod +x scripts/*.sh
@@ -365,7 +365,7 @@ chmod +x scripts/*.sh
 
 ---
 
-## ❌ Erro no pipeline: `Trivy scan failed`
+## Erro no pipeline: `Trivy scan failed`
 
 Verifique se a imagem foi carregada corretamente utilizando:
 
@@ -377,7 +377,7 @@ no step de build.
 
 ---
 
-## ❌ Container encerrando com código 137
+## Container encerrando com código 137
 
 Execute com limite maior de memória:
 
